@@ -1,8 +1,8 @@
 import inspect
-import json
 
 from collections import defaultdict
 from flask.ext.sillywalk.compat import urlparse
+from flask import jsonify
 
 
 __SWAGGERVERSION__ = "1.3"
@@ -57,7 +57,7 @@ class SwaggerApiRegistry(object):
         """
 
         def inner_func():
-            return json.dumps(f())
+            return jsonify(f())
 
         return inner_func
 
@@ -81,32 +81,39 @@ class SwaggerApiRegistry(object):
             resources["models"][k] = v
         return resources
 
-    def _registerModel(self,
-                       c,
-                       type_):
-            if self.app is None:
-                raise SwaggerRegistryError(
-                    "You need to initialize {0} with a Flask app".format(
-                        self.__class__.__name__))
-            self.models[c.__name__] = {
-                "id": c.__name__,
-                "description": c.__doc__ if c.__doc__ is not None else "",
-                "type": type_,
-                "properties": dict()}
-            argspec = inspect.getargspec(c.__init__)
-            argspec.args.remove("self")
-            defaults = {}
-            if argspec.defaults:
-                defaults = list(zip(argspec.args[-len(
-                    argspec.defaults):], argspec.defaults))
-            for arg in argspec.args[:-len(defaults)]:
-                if self.models[c.__name__].get("required") is None:
-                    self.models[c.__name__]["required"] = []
-                self.models[c.__name__]["required"].append(arg)
-                # self.models[c.__name__]["required"][arg] = {"required": True}
-            for k, v in defaults:
-                self.models[c.__name__]["properties"][k] = {"default": v}
-            return c
+    def _class_to_model(self, c, type_="object"):
+        if self.app is None:
+            raise SwaggerRegistryError(
+                "You need to initialize {0} with a Flask app".format(
+                    self.__class__.__name__))
+        model = {
+            "id": c.__name__,
+            "description": c.__doc__ if c.__doc__ is not None else "",
+            "type": type_,
+            "properties": dict()}
+        argspec = inspect.getargspec(c.__init__)
+        argspec.args.remove("self")
+        defaults = {}
+        nondefaults = argspec.args
+
+        if argspec.defaults:
+            defaults = list(zip(argspec.args[-len(
+                argspec.defaults):], argspec.defaults))
+        if defaults:
+            nondefaults = argspec.args[:-len(defaults)]
+
+        for arg in nondefaults:
+            model["properties"][arg] = {
+                "required": True, "type": "string"}
+        for k, v in defaults:
+            model["properties"][k] = {
+                "defaultValue": v, "type": "string"}
+        return model
+
+    def _registerModel(self, c, type_):
+        model = self._class_to_model(c, type_)
+        self.models[c.__name__] = model
+        return c
 
     def add_registerModel(self,
                           c,
@@ -114,11 +121,23 @@ class SwaggerApiRegistry(object):
         """
         Registers a Swagger Model (object).
 
+        By default every argument is set as ``string``.
+
+        TODO
+
+        add __fields__ to specify more paramaters::
+
+              __fields__ = {
+                  'name': {'defaultValue': 'Hans',
+                           'required': True,
+                           'type': 'number'},
+              }
+
         Usage:
 
         >>> class Dog(object):
-        >>>     def __init__(self):
-        >>>     pass
+        >>>     def __init__(self, name, status="ok"):
+        >>>         pass
         >>> my_registry.add_registerModel(Dog, type="Animal")
         """
         self._registerModel(c, type_)
@@ -128,12 +147,24 @@ class SwaggerApiRegistry(object):
         """
         Registers a Swagger Model (object).
 
+        By default every argument is set as ``string``.
+
+        TODO
+
+        add __fields__ to specify more paramaters::
+
+              __fields__ = {
+                  'name': {'defaultValue': 'Hans',
+                           'required': True,
+                           'type': 'number'},
+              }
+
         Usage:
 
         >>> @my_registry.registerModel(type="Animal")
         >>> class Dog(object):
-        >>>     def __init__(self):
-        >>>     pass
+        >>>     def __init__(self, name, status="ok"):
+        >>>         pass
         """
 
         def inner_func(c):
@@ -149,7 +180,8 @@ class SwaggerApiRegistry(object):
                   responseMessages,
                   nickname,
                   notes,
-                  bp):
+                  bp,
+                  models):
 
         if self.app is None:
             raise SwaggerRegistryError(
@@ -180,7 +212,8 @@ class SwaggerApiRegistry(object):
             params=parameters,
             responseMessages=responseMessages,
             nickname=nickname,
-            notes=notes)
+            notes=notes,
+            models=models)
 
         if api.resource not in self.app.view_functions:
             for fmt in SUPPORTED_FORMATS:
@@ -191,7 +224,7 @@ class SwaggerApiRegistry(object):
                     self.app.add_url_rule(
                         route,
                         api.resource,
-                        self.show_resource(api.resource))
+                        self.jsonify(self.show_resource(api.resource)))
 
         if self.r[api.resource].get(api.path) is None:
             self.r[api.resource][api.path] = list()
@@ -206,7 +239,8 @@ class SwaggerApiRegistry(object):
                      responseMessages=[],
                      nickname=None,
                      notes=None,
-                     bp=None):
+                     bp=None,
+                     models=[]):
         """
         Registers an API endpoint.
 
@@ -231,7 +265,7 @@ class SwaggerApiRegistry(object):
 
         """
         self._register(path, f, method, content_type, parameters,
-                       responseMessages, nickname, notes, bp)
+                       responseMessages, nickname, notes, bp, models)
 
     def register(self,
                  path,
@@ -241,7 +275,8 @@ class SwaggerApiRegistry(object):
                  responseMessages=[],
                  nickname=None,
                  notes=None,
-                 bp=None):
+                 bp=None,
+                 models=[]):
         """
         Registers an API endpoint.
 
@@ -266,7 +301,7 @@ class SwaggerApiRegistry(object):
         """
         def inner_func(f):
             self._register(path, f, method, content_type, parameters,
-                           responseMessages, nickname, notes, bp)
+                           responseMessages, nickname, notes, bp, models)
         return inner_func
 
     def show_resource(self, resource):
@@ -281,7 +316,7 @@ class SwaggerApiRegistry(object):
                 "swaggerVersion": __SWAGGERVERSION__,
                 "basePath": self.baseurl,
                 "apis": list(),
-                "models": list()
+                "models": dict()
             }
             resource_map = self.r.get(resource)
             for path, apis in resource_map.items():
@@ -290,9 +325,11 @@ class SwaggerApiRegistry(object):
                     "description": "",
                     "operations": list()}
                 for api in apis:
+                    for m in api.models:
+                        return_value["models"][m.__name__] = self._class_to_model(m)
                     api_object["operations"].append(api.document())
                 return_value["apis"].append(api_object)
-            return json.dumps(return_value)
+            return return_value
 
         return inner_func
 
@@ -319,7 +356,8 @@ class Api(SwaggerDocumentable):
             params=None,
             responseMessages=None,
             nickname=None,
-            notes=None):
+            notes=None,
+            models={}):
         self.httpMethod = httpMethod
         self.summary = method.__doc__ if method.__doc__ is not None else ""
         self.resource = path.lstrip("/").split("/")[0]
@@ -328,11 +366,13 @@ class Api(SwaggerDocumentable):
         self.responseMessages = [] if responseMessages is None else responseMessages
         self.nickname = "" if nickname is None else nickname
         self.notes = notes
+        self.models = models
 
     # See https://github.com/wordnik/swagger-core/wiki/API-Declaration
     def document(self):
         ret = self.__dict__.copy()
         # need to serialize these guys
+        ret.pop("models")
         ret["parameters"] = [p.document() for p in self.parameters]
         ret["responseMessages"] = [e.document() for e in self.responseMessages]
         return ret

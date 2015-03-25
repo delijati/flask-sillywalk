@@ -2,7 +2,7 @@
 import os
 import json
 
-from flask import Flask, make_response, request
+from flask import Flask, make_response, request, jsonify
 from flask.ext.sillywalk import SwaggerApiRegistry, ApiParameter, ApiErrorResponse
 
 
@@ -97,6 +97,31 @@ def toss_the_grenade(number):
             target))
 
 
+class Echo(object):
+    def __init__(self, name, message="Some message"):
+        pass
+
+
+def get_echo():
+    data = request.json
+    return jsonify(data)
+
+
+registry.add_register("/api/v1/echo",
+                      get_echo,
+                      parameters=[
+                          ApiParameter(
+                              name="echodata",
+                              description="Echo me echo",
+                              required=True,
+                              dataType="Echo",
+                              paramType="path",
+                              allowMultiple=False)
+                      ],
+                      method="POST",
+                      models=[Echo])
+
+
 @app.after_request
 def after_request(data):
     response = make_response(data)
@@ -108,4 +133,5 @@ def after_request(data):
 
 
 port = int(os.environ.get("PORT", 5000))
+# print(app.url_map)
 app.run(host="0.0.0.0", port=port, debug=True)

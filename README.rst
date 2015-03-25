@@ -14,7 +14,6 @@ spec, head over to https://github.com/wordnik/swagger-core/wiki or
 http://swagger.wordnik.com
 
 Git Repository and issue tracker: https://github.com/hobbeswalsh/flask-sillywalk
-Documentation: http://flask-sillywalk.readthedocs.org/en/latest/
 
 .. |travisci| image::  https://travis-ci.org/hobbeswalsh/flask-sillywalk.png
 .. _travisci: https://travis-ci.org/hobbeswalsh/flask-sillywalk
@@ -99,6 +98,31 @@ Now, if you navigate to http://localhost:5000/api/v1/resources.json you
 should see the automatic API documentation. See documentation for all the
 cheese endpoints at http://localhost:5000/api/v1/cheese.json
 
+
+Let's create a view witch uses the ``add_register`` and a model as
+``datatype``::
+
+    class Echo(object):
+        def __init__(self, name, message="Some message"):
+            pass
+
+    def echo():
+        data = request.json
+        return jsonify(data)
+
+    registry.add_register("/api/v1/echo",
+       echo,
+       parameters=[
+        ApiParameter(
+            name="echodata",
+            description="Echo me echo",
+            required=True,
+            dataType="Echo",
+            paramType="path",
+            allowMultiple=False)
+      ],
+      method="POST",
+      models=[Echo])
 
 What's left to do?
 ------------------

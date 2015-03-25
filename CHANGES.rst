@@ -2,7 +2,18 @@
 Changes
 =======
 
-2.0 (unreleased)
+2.1 (unreleased)
+----------------
+* Add model to register and add_register to get working type.
+  [Josip Delic]
+
+* Added add_registerModel.
+  [Josip Delic]
+
+* Set content_type to json.
+  [Josip Delic]
+
+2.0 (2015-02-12)
 ----------------
 
 * Python3 support.

@@ -3,7 +3,7 @@ import os
 import json
 import unittest
 
-from flask import Flask, make_response, request, Blueprint
+from flask import Flask, make_response, request, Blueprint, jsonify
 from flask.ext.sillywalk import SwaggerApiRegistry, ApiParameter, ApiErrorResponse
 from flask.ext.sillywalk.compat import s
 
@@ -89,6 +89,29 @@ class TestDecorators(unittest.TestCase):
         if bp:
             app.register_blueprint(bp)
 
+    def _create_add_register_model(self, add_register, app, bp=None):
+        class Echo(object):
+            def __init__(self, name, message="Some message"):
+                pass
+
+        def get_echo():
+            data = request.json
+            return jsonify(data)
+
+        add_register("/api/v1/echo",
+                     get_echo,
+                     parameters=[
+                         ApiParameter(
+                             name="echodata",
+                             description="Echo me echo",
+                             required=True,
+                             dataType="Echo",
+                             paramType="path",
+                             allowMultiple=False)
+                     ],
+                     method="POST",
+                     models=[Echo])
+
     def _create_register(self, register, app, bp=None):
         @register(
             "/api/v1/cheese/<cheeseName>",
@@ -167,11 +190,10 @@ class TestDecorators(unittest.TestCase):
         self.assertEqual(data['basePath'], 'http://localhost:5000/api/v1')
         self.assertEqual(data['apis'], [])
         self.assertEqual(data['apiVersion'], '1.0')
-        self.assertEqual(data['models'], {'SomeCrazyClass': {
-            'description': 'This is just the most crazy class!',
-            'id': 'SomeCrazyClass',
-            'required': ['name', 'age'], 'type': 'object',
-            'properties': {'birthday': {'default': 'tomorrow'}}}})
+        self.assertEqual(data['models']['SomeCrazyClass']['properties'],
+                         {u'age': {u'required': True, u'type': u'string'},
+                          u'birthday': {u'defaultValue': u'tomorrow', u'type': u'string'},
+                          u'name': {u'required': True, u'type': u'string'}})
 
     def test_add_model(self):
         app, registry = self._create_app()
@@ -182,11 +204,10 @@ class TestDecorators(unittest.TestCase):
         self.assertEqual(data['basePath'], 'http://localhost:5000/api/v1')
         self.assertEqual(data['apis'], [])
         self.assertEqual(data['apiVersion'], '1.0')
-        self.assertEqual(data['models'], {'SomeCrazyClass': {
-            'description': 'This is just the most crazy class!',
-            'id': 'SomeCrazyClass',
-            'required': ['name', 'age'], 'type': 'object',
-            'properties': {'birthday': {'default': 'tomorrow'}}}})
+        self.assertEqual(data['models']['SomeCrazyClass']['properties'],
+                         {u'age': {u'required': True, u'type': u'string'},
+                          u'birthday': {u'defaultValue': u'tomorrow', u'type': u'string'},
+                          u'name': {u'required': True, u'type': u'string'}})
 
     def test_register(self):
         app, registry = self._create_app()
@@ -234,6 +255,23 @@ class TestDecorators(unittest.TestCase):
         ret = app.test_client().get("/api/v1/cheese.json")
         data = json.loads(s(ret.data))
         self.assertEqual(data["resourcePath"], "cheese")
+
+    def test_add_register_model(self):
+        app, registry = self._create_app()
+        self._create_add_register_model(registry.add_register, app)
+        ret = app.test_client().get("/api/v1/resources.json")
+        data = json.loads(s(ret.data))
+        self.assertEqual(data['swaggerVersion'], '1.3')
+        self.assertEqual(data['basePath'], 'http://localhost:5000/api/v1')
+        self.assertEqual(sorted([x["path"] for x in data['apis']]),
+                         ['/echo.{format}'])
+        self.assertEqual(data['apiVersion'], '1.0')
+        self.assertEqual(data['models'], {})
+        # test cheese
+        ret = app.test_client().get("/api/v1/echo.json")
+        data = json.loads(s(ret.data))
+        self.assertEqual(data["resourcePath"], "echo")
+        self.assertEqual(data["models"].keys(), ["Echo"])
 
     def test_register_blueprint(self):
         app, registry = self._create_app()
