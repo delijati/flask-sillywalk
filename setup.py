@@ -26,7 +26,7 @@ setup(
     install_requires=[
         'Flask',
         'pytest-cov',
-        'coverage',
+        'coverage==3.7.1',
     ],
     classifiers=[
         'Environment :: Web Environment',

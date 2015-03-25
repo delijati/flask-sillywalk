@@ -81,20 +81,9 @@ class SwaggerApiRegistry(object):
             resources["models"][k] = v
         return resources
 
-    def registerModel(self,
-                      type_="object"):
-        """
-        Registers a Swagger Model (object).
-
-        Usage:
-
-        >>> @my_registry.registerModel(type="Animal")
-        >>> class Dog(object):
-        >>>     def __init__(self):
-        >>>     pass
-        """
-
-        def inner_func(c, *args, **kwargs):
+    def _registerModel(self,
+                       c,
+                       type_):
             if self.app is None:
                 raise SwaggerRegistryError(
                     "You need to initialize {0} with a Flask app".format(
@@ -119,6 +108,36 @@ class SwaggerApiRegistry(object):
                 self.models[c.__name__]["properties"][k] = {"default": v}
             return c
 
+    def add_registerModel(self,
+                          c,
+                          type_="object"):
+        """
+        Registers a Swagger Model (object).
+
+        Usage:
+
+        >>> class Dog(object):
+        >>>     def __init__(self):
+        >>>     pass
+        >>> my_registry.add_registerModel(Dog, type="Animal")
+        """
+        self._registerModel(c, type_)
+
+    def registerModel(self,
+                      type_="object"):
+        """
+        Registers a Swagger Model (object).
+
+        Usage:
+
+        >>> @my_registry.registerModel(type="Animal")
+        >>> class Dog(object):
+        >>>     def __init__(self):
+        >>>     pass
+        """
+
+        def inner_func(c):
+            self._registerModel(c, type_)
         return inner_func
 
     def _register(self,

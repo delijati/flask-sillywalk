@@ -36,6 +36,20 @@ class TestDecorators(unittest.TestCase):
         app.register_blueprint(bp)
         return bp
 
+    def _create_add_model(self, add_registerModel):
+        class SomeCrazyClass(object):
+            """This is just the most crazy class!"""
+
+            def __init__(self, name, age, birthday="tomorrow"):
+                self.name = name
+                self.age = age
+                self.birthday = birthday
+
+            def say_happy_birthday(self):
+                raise HappyBirthdayException("Chances are it's not your birthday.")
+
+        add_registerModel(SomeCrazyClass)
+
     def _create_model(self, registerModel):
         @registerModel()
         class SomeCrazyClass(object):
@@ -147,6 +161,21 @@ class TestDecorators(unittest.TestCase):
     def test_model(self):
         app, registry = self._create_app()
         self._create_model(registry.registerModel)
+        ret = app.test_client().get("/api/v1/resources.json")
+        data = json.loads(s(ret.data))
+        self.assertEqual(data['swaggerVersion'], '1.3')
+        self.assertEqual(data['basePath'], 'http://localhost:5000/api/v1')
+        self.assertEqual(data['apis'], [])
+        self.assertEqual(data['apiVersion'], '1.0')
+        self.assertEqual(data['models'], {'SomeCrazyClass': {
+            'description': 'This is just the most crazy class!',
+            'id': 'SomeCrazyClass',
+            'required': ['name', 'age'], 'type': 'object',
+            'properties': {'birthday': {'default': 'tomorrow'}}}})
+
+    def test_add_model(self):
+        app, registry = self._create_app()
+        self._create_add_model(registry.add_registerModel)
         ret = app.test_client().get("/api/v1/resources.json")
         data = json.loads(s(ret.data))
         self.assertEqual(data['swaggerVersion'], '1.3')
